@@ -163,6 +163,10 @@ const getSimpleResult = (data) => {
 };
 
 Apify.main(async () => {
+    // Data storage
+    var results = []
+    const store = await Apify.openKeyValueStore('homes');
+
     // Initialize input and state of the actor
     const input = await Apify.getInput();
     const state = await Apify.getValue('STATE') || {
@@ -180,7 +184,7 @@ Apify.main(async () => {
     const minTime = input.minDate ? (parseInt(input.minDate) || new Date(input.minDate).getTime()) : null;
 
     // Create launchPuppeteerOptions
-    const lpOptions = input.proxyConfiguration || {useApifyProxy: true};
+    const lpOptions = input.proxyConfiguration || {};  // {useApifyProxy: true}
     Object.assign(lpOptions, {
         useChrome: true,
         stealth: true
@@ -198,7 +202,20 @@ Apify.main(async () => {
 
     // Toggle showing only a subset of result attriutes
     if(input.simple){
-        attributes = {"address":true,"bedrooms":true,"bathrooms":true,"price":true,"yearBuilt":true,"longitude":true,"latitude":true,"description":true,"livingArea":true,"currency":true,"hdpUrl":true,"hugePhotos":true};
+        attributes = {
+            "address":true,
+            "bedrooms":true,
+            "bathrooms":true,
+            "price":true,
+            "yearBuilt":true,
+            // "longitude":true,
+            // "latitude":true,
+            "description":true,
+            "livingArea":true,
+            // "currency":true,
+            "hdpUrl":true,
+            // "hugePhotos":true
+        };
     }
 
     // Intercept sample QueryID
@@ -229,8 +246,12 @@ Apify.main(async () => {
         await requestQueue.addRequest({url: 'https://www.zillow.com/homes/Los-Angeles,-CA_rb/'});
     }
 
+
     // Create crawler
     const crawler = new Apify.PuppeteerCrawler({
+        // maxRequestsPerCrawl: 100,
+        maxConcurrency: 10,
+        
         requestQueue,
 
         maxRequestRetries: 10,
@@ -267,7 +288,10 @@ Apify.main(async () => {
                         try{Object.assign(result, await extendOutputFunction(homeData.data));}
                         catch(e){console.log('extendOutputFunction error:'); console.log(e);}
                     }
+
+                    results.push(result);
                     await Apify.pushData(result);
+
                     state.extractedZpids[zpid] = true;
                     if(input.maxItems && ++state.resultCount >= input.maxItems){
                         return process.exit(0);
@@ -338,5 +362,14 @@ Apify.main(async () => {
 
     // Start crawling
     await crawler.run();
-
+    fs = require('fs');
+    fs.writeFile(
+        './results.json',
+        JSON.stringify(results),
+        function (err) {
+            if (err) {
+                console.error('Crap happens');
+            }
+        }
+    );
 });
